@@ -8,7 +8,7 @@ import json
 
 # --- データ読み込み関数 ---
 # Streamlit Cloudではファイルパスが変わる可能性があるため、直接ファイルを読み込む関数を用意
-@st.cache_data  # Cache the data loading
+@st.cache_data # Cache the data loading
 def load_data(uploaded_file):
     if uploaded_file is not None:
         try:
@@ -25,7 +25,7 @@ def load_data(uploaded_file):
 
             # 日次集計
             df_daily = df_processed.groupby([df_processed['time'].dt.date, 'video_id']).size().reset_index(name='daily_watch_count')
-            df_daily['time'] = pd.to_datetime(df_daily['time'])  # Convert date back to datetime for sorting
+            df_daily['time'] = pd.to_datetime(df_daily['time']) # Convert date back to datetime for sorting
 
             # 累積集計
             df_cumulative = df_daily.sort_values(by=['video_id', 'time']).copy()
@@ -55,6 +55,7 @@ def load_data(uploaded_file):
             most_watched_day = df_daily_total.loc[df_daily_total['total_watch_count'].idxmax()]
             most_watched_month = df_monthly_total.loc[df_monthly_total['total_watch_count'].idxmax()]
 
+
             return df, df_processed, df_daily, df_cumulative, df_daily_total, df_monthly_total, video_info_dict, most_watched_day, most_watched_month
 
         except Exception as e:
@@ -67,15 +68,15 @@ def load_data(uploaded_file):
 # --- Matplotlib 日本語フォント設定 ---
 # Streamlit Cloud環境に依存するため、一般的なフォント設定を試みる
 try:
-    plt.rcParams['font.family'] = 'sans-serif'  # Fallback to a common font family
-    plt.rcParams['axes.unicode_minus'] = False  # Avoid displaying minus sign as a box
+    plt.rcParams['font.family'] = 'sans-serif' # Fallback to a common font family
+    plt.rcParams['axes.unicode_minus'] = False # Avoid displaying minus sign as a box
 except Exception as e:
     st.warning(f"Could not set font properties: {e}")
 
 
 # --- Streamlit アプリケーション本体 ---
 
-st.set_page_config(layout="wide")  # Use wide layout
+st.set_page_config(layout="wide") # Use wide layout
 
 st.title('📺 YouTube視聴履歴分析ダッシュボード')
 
@@ -87,7 +88,7 @@ uploaded_file = st.sidebar.file_uploader("watch-history.jsonファイルをア�
 # Load data using the uploaded file
 df, df_processed, df_daily, df_cumulative, df_daily_total, df_monthly_total, video_info_dict, most_watched_day, most_watched_month = load_data(uploaded_file)
 
-if df is not None:  # Proceed only if data loaded successfully
+if df is not None: # Proceed only if data loaded successfully
 
     # Get the list of unique video IDs from the processed DataFrame
     unique_video_ids = df_processed['video_id'].unique().tolist()
@@ -99,7 +100,7 @@ if df is not None:  # Proceed only if data loaded successfully
     selected_video_id = st.sidebar.selectbox('表示したい動画IDを選択してください:', unique_video_ids)
 
     # Use columns for better layout in the main area
-    col1, col2 = st.columns([2, 1])  # Example: Two columns, 2/3 and 1/3 width
+    col1, col2 = st.columns([2, 1]) # Example: Two columns, 2/3 and 1/3 width
 
     with col1:
         st.header('分析結果')
@@ -108,7 +109,7 @@ if df is not None:  # Proceed only if data loaded successfully
         if selected_video_id == '--- 全体統計を表示 ---':
             st.subheader('📈 全体の視聴統計')
 
-            st.markdown("---")  # Add a separator
+            st.markdown("---") # Add a separator
 
             st.subheader('日ごとの総視聴回数')
             if df_daily_total is not None and not df_daily_total.empty:
@@ -124,7 +125,7 @@ if df is not None:  # Proceed only if data loaded successfully
                 if most_watched_day is not None:
                     st.markdown(f"**💡 一番視聴回数が多かった日:** `{most_watched_day['date']}` ({most_watched_day['total_watch_count']} 回)")
 
-            st.markdown("---")  # Add a separator
+            st.markdown("---") # Add a separator
 
             st.subheader('月ごとの総視聴回数')
             if df_monthly_total is not None and not df_monthly_total.empty:
@@ -138,7 +139,7 @@ if df is not None:  # Proceed only if data loaded successfully
                 plt.close(fig4)
 
                 if most_watched_month is not None:
-                    st.markdown(f"**💡 一番視聴回数が多かった月:** `{most_watched_month['month']}` ({most_watched_month['total_watch_count']} 回)")
+                     st.markdown(f"**💡 一番視聴回数が多かった月:** `{most_watched_month['month']}` ({most_watched_month['total_watch_count']} 回)")
 
         else:
             # Display information for the specific video ID if selected
@@ -156,10 +157,10 @@ if df is not None:  # Proceed only if data loaded successfully
                 df_filtered = df_cumulative[df_cumulative['video_id'] == video_id_input].copy()
 
                 if not df_filtered.empty:
-                    st.markdown("---")  # Add a separator
+                    st.markdown("---") # Add a separator
 
                     st.subheader('日次視聴回数')
-                    df_filtered['date'] = df_filtered['time'].dt.date  # Convert time to date
+                    df_filtered['date'] = df_filtered['time'].dt.date # Convert time to date
                     fig1, ax1 = plt.subplots(figsize=(14, 7))
                     sns.barplot(data=df_filtered, x='date', y='daily_watch_count', color='skyblue', ax=ax1)
                     ax1.set_title(f'日次視聴回数: {video_info["title"]}')
@@ -169,7 +170,7 @@ if df is not None:  # Proceed only if data loaded successfully
                     st.pyplot(fig1)
                     plt.close(fig1)
 
-                    st.markdown("---")  # Add a separator
+                    st.markdown("---") # Add a separator
 
                     st.subheader('累積視聴回数')
                     fig2, ax2 = plt.subplots(figsize=(14, 7))
@@ -181,7 +182,7 @@ if df is not None:  # Proceed only if data loaded successfully
                     st.pyplot(fig2)
                     plt.close(fig2)
 
-                    st.markdown("---")  # Add a separator
+                    st.markdown("---") # Add a separator
 
                     st.subheader('詳細データ')
                     st.dataframe(df_filtered[['date', 'daily_watch_count', 'cumulative_watch_count']])
