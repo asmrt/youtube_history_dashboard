@@ -24,19 +24,21 @@ def load_data(uploaded_file):
             df_processed = df_processed[['time', 'video_id']]
 
             # 日次集計
-            df_daily = df_processed.groupby([df_processed['time'].dt.date, 'video_id']).size().reset_index(name='daily_watch_count')
-            df_daily['time'] = pd.to_datetime(df_daily['time']) # Convert date back to datetime for sorting
+            # Convert time to JST before daily aggregation
+            df_processed['time_jst'] = df_processed['time'].dt.tz_convert('Asia/Tokyo')
+            df_daily = df_processed.groupby([df_processed['time_jst'].dt.date, 'video_id']).size().reset_index(name='daily_watch_count')
+            df_daily['time'] = pd.to_datetime(df_daily['time_jst']) # Convert date back to datetime for sorting
 
             # 累積集計
             df_cumulative = df_daily.sort_values(by=['video_id', 'time']).copy()
             df_cumulative['cumulative_watch_count'] = df_cumulative.groupby('video_id')['daily_watch_count'].cumsum()
 
             # 全体の日次集計
-            df_daily_total = df_processed['time'].dt.date.value_counts().sort_index().reset_index()
+            df_daily_total = df_processed['time_jst'].dt.date.value_counts().sort_index().reset_index()
             df_daily_total.columns = ['date', 'total_watch_count']
 
             # 全体の月次集計
-            df_monthly_total = df_processed['time'].dt.to_period('M').value_counts().sort_index().reset_index()
+            df_monthly_total = df_processed['time_jst'].dt.to_period('M').value_counts().sort_index().reset_index()
             df_monthly_total.columns = ['month', 'total_watch_count']
             df_monthly_total['month'] = df_monthly_total['month'].astype(str)
 
@@ -66,12 +68,15 @@ def load_data(uploaded_file):
 
 
 # --- Matplotlib 日本語フォント設定 ---
-# Streamlit Cloud環境に依存するため、一般的なフォント設定を試みる
+# Streamlit Cloud環境で日本語フォントを適切に表示するための設定
+# Streamlit Cloudではfonts-ipaexfont-gothicが利用可能
 try:
-    plt.rcParams['font.family'] = 'sans-serif' # Fallback to a common font family
-    plt.rcParams['axes.unicode_minus'] = False # Avoid displaying minus sign as a box
+    plt.rcParams['font.family'] = 'IPAexGothic'
+    plt.rcParams['axes.unicode_minus'] = False # マイナス記号を正しく表示
+    print("Using IPAexGothic font for matplotlib.")
 except Exception as e:
-    st.warning(f"Could not set font properties: {e}")
+    st.warning(f"日本語フォントの設定に失敗しました。文字化けする可能性があります: {e}")
+    plt.rcParams['font.family'] = 'sans-serif' # Fallback to a common font family
 
 
 # --- Streamlit アプリケーション本体 ---
@@ -91,7 +96,11 @@ df, df_processed, df_daily, df_cumulative, df_daily_total, df_monthly_total, vid
 if df is not None: # Proceed only if data loaded successfully
 
     # Get the list of unique video IDs from the processed DataFrame
-    unique_video_ids = df_processed['video_id'].unique().tolist()
+    if df_processed is not None:
+        unique_video_ids = df_processed['video_id'].unique().tolist()
+    else:
+        unique_video_ids = []
+
 
     # Add an option for "Overall Statistics"
     unique_video_ids.insert(0, '--- 全体統計を表示 ---')
@@ -114,11 +123,20 @@ if df is not None: # Proceed only if data loaded successfully
             st.subheader('日ごとの総視聴回数')
             if df_daily_total is not None and not df_daily_total.empty:
                 fig3, ax3 = plt.subplots(figsize=(14, 7))
-                sns.lineplot(data=df_daily_total, x='date', y='total_watch_count', ax=ax3)
+                # Change background color to white
+                fig3.patch.set_facecolor('white')
+                ax3.set_facecolor('white')
+                # Change line color to red
+                sns.lineplot(data=df_daily_total, x='date', y='total_watch_count', ax=ax3, color='red')
                 ax3.set_title('日ごとの総視聴回数')
                 ax3.set_xlabel('日付')
                 ax3.set_ylabel('総視聴回数')
                 plt.xticks(rotation=90)
+
+                # Add data labels (optional, can be crowded)
+                # for i, row in df_daily_total.iterrows():
+                #     ax3.text(row['date'], row['total_watch_count'], round(row['total_watch_count'], 1), color='black', ha="center")
+
                 st.pyplot(fig3)
                 plt.close(fig3)
 
@@ -130,11 +148,20 @@ if df is not None: # Proceed only if data loaded successfully
             st.subheader('月ごとの総視聴回数')
             if df_monthly_total is not None and not df_monthly_total.empty:
                 fig4, ax4 = plt.subplots(figsize=(12, 6))
-                sns.barplot(data=df_monthly_total, x='month', y='total_watch_count', color='lightcoral', ax=ax4)
+                # Change background color to white
+                fig4.patch.set_facecolor('white')
+                ax4.set_facecolor('white')
+                # Change bar color to a shade of red
+                sns.barplot(data=df_monthly_total, x='month', y='total_watch_count', color='salmon', ax=ax4)
                 ax4.set_title('月ごとの総視聴回数')
                 ax4.set_xlabel('月')
                 ax4.set_ylabel('総視聴回数')
                 plt.xticks(rotation=45)
+
+                # Add data labels
+                for container in ax4.containers:
+                    ax4.bar_label(container)
+
                 st.pyplot(fig4)
                 plt.close(fig4)
 
@@ -162,11 +189,20 @@ if df is not None: # Proceed only if data loaded successfully
                     st.subheader('日次視聴回数')
                     df_filtered['date'] = df_filtered['time'].dt.date # Convert time to date
                     fig1, ax1 = plt.subplots(figsize=(14, 7))
+                    # Change background color to white
+                    fig1.patch.set_facecolor('white')
+                    ax1.set_facecolor('white')
+                     # Change bar color to a shade of blue
                     sns.barplot(data=df_filtered, x='date', y='daily_watch_count', color='skyblue', ax=ax1)
                     ax1.set_title(f'日次視聴回数: {video_info["title"]}')
                     ax1.set_xlabel('日付')
                     ax1.set_ylabel('日次視聴回数')
                     plt.xticks(rotation=90)
+
+                    # Add data labels
+                    for container in ax1.containers:
+                        ax1.bar_label(container)
+
                     st.pyplot(fig1)
                     plt.close(fig1)
 
@@ -174,11 +210,20 @@ if df is not None: # Proceed only if data loaded successfully
 
                     st.subheader('累積視聴回数')
                     fig2, ax2 = plt.subplots(figsize=(14, 7))
-                    sns.lineplot(data=df_filtered, x='date', y='cumulative_watch_count', ax=ax2)
+                    # Change background color to white
+                    fig2.patch.set_facecolor('white')
+                    ax2.set_facecolor('white')
+                    # Change line color to red
+                    sns.lineplot(data=df_filtered, x='date', y='cumulative_watch_count', ax=ax2, color='red')
                     ax2.set_title(f'累積視聴回数: {video_info["title"]}')
                     ax2.set_xlabel('日付')
                     ax2.set_ylabel('累積視聴回数')
                     plt.xticks(rotation=90)
+
+                    # Add data labels (can be crowded for many data points)
+                    # for i, row in df_filtered.iterrows():
+                    #     ax2.text(row['date'], row['cumulative_watch_count'], round(row['cumulative_watch_count'], 1), color='black', ha="center")
+
                     st.pyplot(fig2)
                     plt.close(fig2)
 
