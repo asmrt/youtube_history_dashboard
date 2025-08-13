@@ -36,6 +36,7 @@ def load_data(uploaded_file):
             # 全体の日次集計
             df_daily_total = df_processed['time_jst'].dt.date.value_counts().sort_index().reset_index()
             df_daily_total.columns = ['date', 'total_watch_count']
+            df_daily_total['date'] = pd.to_datetime(df_daily_total['date'])
 
             # 全体の月次集計
             df_monthly_total = df_processed['time_jst'].dt.to_period('M').value_counts().sort_index().reset_index()
@@ -120,6 +121,50 @@ if df is not None: # Proceed only if data loaded successfully
 
             st.markdown("---") # Add a separator
 
+            st.subheader('日ごとの視聴回数ヒートマップ')
+            if df_daily_total is not None and not df_daily_total.empty:
+                # Prepare data for heatmap
+                heatmap_data = df_daily_total.copy()
+                heatmap_data['year_month'] = heatmap_data['date'].dt.to_period('M').astype(str)
+                
+                # Use dayofweek to get a numerical representation (Mon=0, Sun=6)
+                heatmap_data['weekday_num'] = heatmap_data['date'].dt.dayofweek
+                weekday_map = {0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun'}
+                heatmap_data['weekday'] = heatmap_data['weekday_num'].map(weekday_map)
+
+                # Create pivot table
+                pivot_table = pd.pivot_table(
+                    heatmap_data,
+                    values='total_watch_count',
+                    index='weekday',
+                    columns='year_month',
+                    fill_value=0
+                )
+                
+                # Define weekday order for correct display
+                weekday_order = list(weekday_map.values())
+                
+                # Reindex to ensure correct weekday order
+                pivot_table = pivot_table.reindex(weekday_order)
+
+                fig_heatmap, ax_heatmap = plt.subplots(figsize=(15, 8))
+                sns.heatmap(
+                    pivot_table,
+                    ax=ax_heatmap,
+                    cmap='YlGnBu',
+                    linewidths=.5,
+                    annot=False,
+                    fmt='d',
+                    cbar_kws={'label': '視聴回数'} # colorbarのラベルを追加
+                )
+                ax_heatmap.set_title('日ごとの視聴回数ヒートマップ')
+                ax_heatmap.set_xlabel('年月')
+                ax_heatmap.set_ylabel('曜日')
+                st.pyplot(fig_heatmap)
+                plt.close(fig_heatmap)
+
+            st.markdown("---") # Add a separator
+
             st.subheader('日ごとの総視聴回数')
             if df_daily_total is not None and not df_daily_total.empty:
                 fig3, ax3 = plt.subplots(figsize=(14, 7))
@@ -141,7 +186,7 @@ if df is not None: # Proceed only if data loaded successfully
                 plt.close(fig3)
 
                 if most_watched_day is not None:
-                    st.markdown(f"**💡 一番視聴回数が多かった日:** `{most_watched_day['date']}` ({most_watched_day['total_watch_count']} 回)")
+                    st.markdown(f"**💡 一番視聴回数が多かった日:** `{most_watched_day['date'].strftime('%Y-%m-%d')}` ({most_watched_day['total_watch_count']} 回)")
 
             st.markdown("---") # Add a separator
 
