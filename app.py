@@ -31,8 +31,10 @@ def load_data(uploaded_file):
 
         # 日時変換（tz-aware 対応）
         df['time'] = pd.to_datetime(df['time'], errors='coerce')
-        if df['time'].dt.tz is None:
+        try:
             df['time'] = df['time'].dt.tz_localize('UTC')
+        except TypeError:
+            df['time'] = df['time'].dt.tz_convert('UTC')
         df['time'] = df['time'].dt.tz_convert('Asia/Tokyo')
 
         # 日次集計
