@@ -1,12 +1,19 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+# --- 日本語フォント設定（Streamlit Cloud対応） ---
+try:
+    plt.rcParams['font.family'] = 'IPAexGothic'
+    plt.rcParams['axes.unicode_minus'] = False  # マイナス記号が文字化けしないように
+except Exception as e:
+    st.warning(f"日本語フォントの設定に失敗しました: {e}")
+    plt.rcParams['font.family'] = 'sans-serif'  # フォールバック
+
 import seaborn as sns
 import json
 import re
 import calmap
 from matplotlib.colors import LinearSegmentedColormap
-
 # --- データ読み込み関数 ---
 @st.cache_data
 def load_data(uploaded_file):
