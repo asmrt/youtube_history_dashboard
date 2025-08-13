@@ -2,4 +2,4 @@ streamlit
 pandas
 matplotlib
 seaborn
-calplot
+calplot>=0.1.7
