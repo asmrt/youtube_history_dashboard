@@ -1,5 +1,5 @@
-
-streamlit>=1.0
+streamlit
 pandas
 matplotlib
 seaborn
+calmap
