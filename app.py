@@ -1,19 +1,20 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-# --- 日本語フォント設定（Streamlit Cloud対応） ---
-try:
-    plt.rcParams['font.family'] = 'IPAexGothic'
-    plt.rcParams['axes.unicode_minus'] = False  # マイナス記号が文字化けしないように
-except Exception as e:
-    st.warning(f"日本語フォントの設定に失敗しました: {e}")
-    plt.rcParams['font.family'] = 'sans-serif'  # フォールバック
-
 import seaborn as sns
 import json
 import re
-import calmap
+import calplot
 from matplotlib.colors import LinearSegmentedColormap
+
+# --- 日本語フォント設定（Streamlit Cloud対応） ---
+try:
+    plt.rcParams['font.family'] = 'IPAexGothic'
+    plt.rcParams['axes.unicode_minus'] = False
+except Exception as e:
+    st.warning(f"日本語フォント設定に失敗: {e}")
+    plt.rcParams['font.family'] = 'sans-serif'
+
 # --- データ読み込み関数 ---
 @st.cache_data
 def load_data(uploaded_file):
@@ -81,8 +82,14 @@ def plot_calendar_heatmap(df_daily_total):
         return
     cmap = LinearSegmentedColormap.from_list("black_grey_red", ["black", "grey", "red"])
     s = pd.Series(df_daily_total['total_watch_count'].values, index=pd.to_datetime(df_daily_total['date']))
-    fig, ax = plt.subplots(figsize=(12, 3))
-    calmap.calendarplot(s, cmap=cmap, fillcolor='lightgrey', linewidth=0.5, fig_kws=dict(figsize=(12, 3)))
+    fig, ax = calplot.calplot(
+        s,
+        cmap=cmap,
+        edgecolor='white',
+        linewidth=0.5,
+        colorbar=False,
+        figsize=(12, 3)
+    )
     st.pyplot(fig)
 
 # --- 累積スコアボード表示 ---
@@ -114,7 +121,7 @@ if df is not None:
     selected_video_id = st.sidebar.selectbox('表示したい動画IDを選択してください:', unique_video_ids)
 
     if selected_video_id == '--- 全体統計を表示 ---':
-        st.subheader("📅 日次集計（GitHub風）")
+        st.subheader("📅 日次集計")
         plot_calendar_heatmap(df_daily_total)
 
         st.subheader("🏆 累積スコアボード（全動画合計）")
@@ -128,14 +135,14 @@ if df is not None:
             st.markdown(f"### {video_info['title']}")
             st.image(video_info['thumbnail_url'], caption=video_info['title'])
 
-        st.subheader("📅 日次集計（GitHub風）")
+        st.subheader("📅 日次集計")
         df_video_daily = df_cumulative[df_cumulative['video_id'] == selected_video_id][['time', 'daily_watch_count']]
         if not df_video_daily.empty:
             df_video_daily_total = df_video_daily.groupby(df_video_daily['time'].dt.date)['daily_watch_count'].sum().reset_index()
             df_video_daily_total.columns = ['date', 'total_watch_count']
             plot_calendar_heatmap(df_video_daily_total)
 
-        st.subheader("🏆 累積スコアボード（この動画）")
+        st.subheader("🏆 累積スコアボード")
         df_filtered = df_cumulative[df_cumulative['video_id'] == selected_video_id]
         display_cumulative_score(df_filtered)
 
