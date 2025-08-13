@@ -36,7 +36,9 @@ def load_data(uploaded_file):
             # 全体の日次集計
             df_daily_total = df_processed['time_jst'].dt.date.value_counts().sort_index().reset_index()
             df_daily_total.columns = ['date', 'total_watch_count']
+            # Ensure 'date' column is datetime objects
             df_daily_total['date'] = pd.to_datetime(df_daily_total['date'])
+
 
             # 全体の月次集計
             df_monthly_total = df_processed['time_jst'].dt.to_period('M').value_counts().sort_index().reset_index()
@@ -55,17 +57,41 @@ def load_data(uploaded_file):
                 }
 
             # 一番視聴回数が多かった日と月 (全体)
-            most_watched_day = df_daily_total.loc[df_daily_total['total_watch_count'].idxmax()]
-            most_watched_month = df_monthly_total.loc[df_monthly_total['total_watch_count'].idxmax()]
+            most_watched_day = None
+            if not df_daily_total.empty:
+                 most_watched_day = df_daily_total.loc[df_daily_total['total_watch_count'].idxmax()]
+
+            most_watched_month = None
+            if not df_monthly_total.empty:
+                 most_watched_month = df_monthly_total.loc[df_monthly_total['total_watch_count'].idxmax()]
+
+            # スコアボードデータの準備 (最新の累積視聴回数)
+            if df_cumulative is not None and not df_cumulative.empty:
+                latest_indices = df_cumulative.groupby('video_id')['time'].idxmax()
+                df_latest_cumulative = df_cumulative.loc[latest_indices].copy()
+                df_latest_cumulative = df_latest_cumulative[['video_id', 'cumulative_watch_count']]
+
+                if video_info_dict:
+                    df_video_info = pd.DataFrame.from_dict(video_info_dict, orient='index').reset_index()
+                    df_video_info.columns = ['video_id', 'title', 'thumbnail_url']
+                    df_scoreboard = pd.merge(df_latest_cumulative, df_video_info, on='video_id', how='left')
+                else:
+                    df_scoreboard = df_latest_cumulative.copy()
+                    df_scoreboard['title'] = 'タイトル情報なし'
+                    df_scoreboard['thumbnail_url'] = 'サムネイル情報なし'
+
+                df_scoreboard = df_scoreboard.sort_values(by='cumulative_watch_count', ascending=False).reset_index(drop=True)
+            else:
+                 df_scoreboard = pd.DataFrame(columns=['video_id', 'cumulative_watch_count', 'title', 'thumbnail_url'])
 
 
-            return df, df_processed, df_daily, df_cumulative, df_daily_total, df_monthly_total, video_info_dict, most_watched_day, most_watched_month
+            return df, df_processed, df_daily, df_cumulative, df_daily_total, df_monthly_total, video_info_dict, most_watched_day, most_watched_month, df_scoreboard
 
         except Exception as e:
             st.error(f"データの読み込みまたは処理中にエラーが発生しました: {e}")
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, None, None, None
     else:
-        return None, None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None
 
 
 # --- Matplotlib 日本語フォント設定 ---
@@ -92,7 +118,7 @@ st.sidebar.header('設定')
 uploaded_file = st.sidebar.file_uploader("watch-history.jsonファイルをアップロードしてください", type=["json"])
 
 # Load data using the uploaded file
-df, df_processed, df_daily, df_cumulative, df_daily_total, df_monthly_total, video_info_dict, most_watched_day, most_watched_month = load_data(uploaded_file)
+df, df_processed, df_daily, df_cumulative, df_daily_total, df_monthly_total, video_info_dict, most_watched_day, most_watched_month, df_scoreboard = load_data(uploaded_file)
 
 if df is not None: # Proceed only if data loaded successfully
 
@@ -121,11 +147,24 @@ if df is not None: # Proceed only if data loaded successfully
 
             st.markdown("---") # Add a separator
 
+            st.subheader('動画別 累積視聴回数 スコアボード (最新)')
+            if df_scoreboard is not None and not df_scoreboard.empty:
+                 # Display scoreboard, including title and cumulative count
+                 st.dataframe(df_scoreboard[['title', 'cumulative_watch_count']])
+            else:
+                 st.info("スコアボードデータが見つかりませんでした。")
+
+
+            st.markdown("---") # Add a separator
+
             st.subheader('日ごとの視聴回数ヒートマップ')
             if df_daily_total is not None and not df_daily_total.empty:
                 # Prepare data for heatmap
                 heatmap_data = df_daily_total.copy()
-                heatmap_data['year_month'] = heatmap_data['date'].dt.to_period('M').astype(str)
+                # Use day of the month and month-year for columns
+                heatmap_data['day'] = heatmap_data['date'].dt.day
+                heatmap_data['month_year'] = heatmap_data['date'].dt.to_period('M').astype(str)
+
 
                 # Use dayofweek to get a numerical representation (Mon=0, Sun=6)
                 heatmap_data['weekday_num'] = heatmap_data['date'].dt.dayofweek
@@ -137,7 +176,7 @@ if df is not None: # Proceed only if data loaded successfully
                     heatmap_data,
                     values='total_watch_count',
                     index='weekday',
-                    columns='year_month',
+                    columns=['month_year', 'day'], # Use month-year and day for columns
                     fill_value=0
                 )
 
@@ -147,7 +186,7 @@ if df is not None: # Proceed only if data loaded successfully
                 # Reindex to ensure correct weekday order
                 pivot_table = pivot_table.reindex(weekday_order)
 
-                fig_heatmap, ax_heatmap = plt.subplots(figsize=(15, 8))
+                fig_heatmap, ax_heatmap = plt.subplots(figsize=(20, 8)) # Adjust figure size for daily view
                 sns.heatmap(
                     pivot_table,
                     ax=ax_heatmap,
@@ -158,8 +197,9 @@ if df is not None: # Proceed only if data loaded successfully
                     cbar_kws={'label': '視聴回数'} # colorbarのラベルを追加
                 )
                 ax_heatmap.set_title('日ごとの総視聴回数ヒートマップ') # Updated title
-                ax_heatmap.set_xlabel('年月')
+                ax_heatmap.set_xlabel('年月 - 日') # Update xlabel
                 ax_heatmap.set_ylabel('曜日')
+                plt.xticks(rotation=90) # Rotate x-axis labels for readability
                 st.pyplot(fig_heatmap)
                 plt.close(fig_heatmap)
 
@@ -185,8 +225,18 @@ if df is not None: # Proceed only if data loaded successfully
                 st.pyplot(fig3)
                 plt.close(fig3)
 
-                if most_watched_day is not None:
-                    st.markdown(f"**💡 一番視聴回数が多かった日:** `{most_watched_day['date'].strftime('%Y-%m-%d')}` ({most_watched_day['total_watch_count']} 回)")
+                # Safely access and format date for most_watched_day
+                if most_watched_day is not None and isinstance(most_watched_day, pd.Series) and 'date' in most_watched_day:
+                    date_value = most_watched_day['date']
+                    most_watched_day_str = str(date_value) # Default to string representation
+                    if isinstance(date_value, pd.Timestamp):
+                        most_watched_day_str = date_value.strftime('%Y-%m-%d')
+                    elif isinstance(date_value, pd.Period): # Handle Period objects if necessary
+                         most_watched_day_str = str(date_value)
+                    st.markdown(f"**💡 一番視聴回数が多かった日:** `{most_watched_day_str}` ({most_watched_day['total_watch_count']} 回)")
+                else:
+                     st.info("一番視聴回数が多かった日のデータが見つかりませんでした。")
+
 
             st.markdown("---") # Add a separator
 
@@ -236,7 +286,10 @@ if df is not None: # Proceed only if data loaded successfully
                     heatmap_data_video = df_daily[df_daily['video_id'] == video_id_input].copy()
                     if not heatmap_data_video.empty:
                         heatmap_data_video['date'] = pd.to_datetime(heatmap_data_video['time_jst']).dt.date
-                        heatmap_data_video['year_month'] = pd.to_datetime(heatmap_data_video['date']).dt.to_period('M').astype(str)
+                        # Use day of the month and month-year for columns
+                        heatmap_data_video['day'] = pd.to_datetime(heatmap_data_video['date']).dt.day
+                        heatmap_data_video['month_year'] = pd.to_datetime(heatmap_data_video['date']).dt.to_period('M').astype(str)
+
                         heatmap_data_video['weekday_num'] = pd.to_datetime(heatmap_data_video['date']).dt.dayofweek
                         weekday_map = {0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun'}
                         heatmap_data_video['weekday'] = heatmap_data_video['weekday_num'].map(weekday_map)
@@ -246,7 +299,7 @@ if df is not None: # Proceed only if data loaded successfully
                             heatmap_data_video,
                             values='daily_watch_count',
                             index='weekday',
-                            columns='year_month',
+                            columns=['month_year', 'day'], # Use month-year and day for columns
                             fill_value=0
                         )
 
@@ -256,7 +309,7 @@ if df is not None: # Proceed only if data loaded successfully
                         # Reindex to ensure correct weekday order
                         pivot_table_video = pivot_table_video.reindex(weekday_order)
 
-                        fig_heatmap_video, ax_heatmap_video = plt.subplots(figsize=(15, 8))
+                        fig_heatmap_video, ax_heatmap_video = plt.subplots(figsize=(20, 8)) # Adjust figure size for daily view
                         sns.heatmap(
                             pivot_table_video,
                             ax=ax_heatmap_video,
@@ -267,8 +320,9 @@ if df is not None: # Proceed only if data loaded successfully
                              cbar_kws={'label': '視聴回数'} # colorbarのラベルを追加
                         )
                         ax_heatmap_video.set_title(f'日ごとの視聴回数ヒートマップ: {video_info["title"]}')
-                        ax_heatmap_video.set_xlabel('年月')
+                        ax_heatmap_video.set_xlabel('年月 - 日') # Update xlabel
                         ax_heatmap_video.set_ylabel('曜日')
+                        plt.xticks(rotation=90) # Rotate x-axis labels for readability
                         st.pyplot(fig_heatmap_video)
                         plt.close(fig_heatmap_video)
                     else:
