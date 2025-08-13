@@ -25,10 +25,15 @@ def load_data(uploaded_file):
         data = json.load(uploaded_file)
         df = pd.DataFrame(data)
 
-        # video_id抽出 & 日時変換
+        # video_id抽出
         df['video_id'] = df['titleUrl'].str.extract(r'v=([^&]+)')
         df = df.dropna(subset=['video_id'])
-        df['time'] = pd.to_datetime(df['time'], errors='coerce').dt.tz_localize('UTC').dt.tz_convert('Asia/Tokyo')
+
+        # 日時変換（tz-aware 対応）
+        df['time'] = pd.to_datetime(df['time'], errors='coerce')
+        if df['time'].dt.tz is None:
+            df['time'] = df['time'].dt.tz_localize('UTC')
+        df['time'] = df['time'].dt.tz_convert('Asia/Tokyo')
 
         # 日次集計
         df_daily = (
@@ -135,14 +140,14 @@ if df is not None:
             st.markdown(f"### {video_info['title']}")
             st.image(video_info['thumbnail_url'], caption=video_info['title'])
 
-        st.subheader("📅 日次集計")
+        st.subheader("📅 日次集計（対象動画）")
         df_video_daily = df_cumulative[df_cumulative['video_id'] == selected_video_id][['time', 'daily_watch_count']]
         if not df_video_daily.empty:
             df_video_daily_total = df_video_daily.groupby(df_video_daily['time'].dt.date)['daily_watch_count'].sum().reset_index()
             df_video_daily_total.columns = ['date', 'total_watch_count']
             plot_calendar_heatmap(df_video_daily_total)
 
-        st.subheader("🏆 累積スコアボード")
+        st.subheader("🏆 累積スコアボード（対象動画）")
         df_filtered = df_cumulative[df_cumulative['video_id'] == selected_video_id]
         display_cumulative_score(df_filtered)
 
