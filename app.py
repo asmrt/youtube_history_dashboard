@@ -157,7 +157,7 @@ if df is not None: # Proceed only if data loaded successfully
 
             st.markdown("---") # Add a separator
 
-            st.subheader('日ごとの視聴回数ヒートマップ')
+            st.subheader('日ごとの総視聴回数ヒートマップ')
             if df_daily_total is not None and not df_daily_total.empty:
                 # Prepare data for heatmap
                 heatmap_data = df_daily_total.copy()
@@ -276,9 +276,9 @@ if df is not None: # Proceed only if data loaded successfully
                 st.image(video_info['thumbnail_url'], caption=video_info['title'])
 
                 # Filter data for the selected video ID
-                df_filtered = df_cumulative[df_cumulative['video_id'] == video_id_input].copy()
+                df_filtered_video = df_cumulative[df_cumulative['video_id'] == video_id_input].copy()
 
-                if not df_filtered.empty:
+                if not df_filtered_video.empty:
                     st.markdown("---") # Add a separator
 
                     st.subheader('日次視聴回数ヒートマップ')
@@ -332,13 +332,13 @@ if df is not None: # Proceed only if data loaded successfully
                     st.markdown("---") # Add a separator
 
                     st.subheader('日次視聴回数')
-                    df_filtered['date'] = df_filtered['time'].dt.date # Convert time to date
+                    df_filtered_video['date'] = df_filtered_video['time'].dt.date # Convert time to date
                     fig1, ax1 = plt.subplots(figsize=(14, 7))
                     # Change background color to white
                     fig1.patch.set_facecolor('white')
                     ax1.set_facecolor('white')
                      # Change bar color to a shade of blue
-                    sns.barplot(data=df_filtered, x='date', y='daily_watch_count', color='skyblue', ax=ax1)
+                    sns.barplot(data=df_filtered_video, x='date', y='daily_watch_count', color='skyblue', ax=ax1)
                     ax1.set_title(f'日次視聴回数: {video_info["title"]}')
                     ax1.set_xlabel('日付')
                     ax1.set_ylabel('日次視聴回数')
@@ -359,14 +359,14 @@ if df is not None: # Proceed only if data loaded successfully
                     fig2.patch.set_facecolor('white')
                     ax2.set_facecolor('white')
                     # Change line color to red
-                    sns.lineplot(data=df_filtered, x='date', y='cumulative_watch_count', ax=ax2, color='red')
+                    sns.lineplot(data=df_filtered_video, x='date', y='cumulative_watch_count', ax=ax2, color='red')
                     ax2.set_title(f'累積視聴回数: {video_info["title"]}')
                     ax2.set_xlabel('日付')
                     ax2.set_ylabel('累積視聴回数')
                     plt.xticks(rotation=90)
 
                     # Add data labels (can be crowded for many data points)
-                    # for i, row in df_filtered.iterrows():
+                    # for i, row in df_filtered_video.iterrows():
                     #     ax2.text(row['date'], row['cumulative_watch_count'], round(row['cumulative_watch_count'], 1), color='black', ha="center")
 
                     st.pyplot(fig2)
@@ -375,7 +375,7 @@ if df is not None: # Proceed only if data loaded successfully
                     st.markdown("---") # Add a separator
 
                     st.subheader('詳細データ')
-                    st.dataframe(df_filtered[['date', 'daily_watch_count', 'cumulative_watch_count']])
+                    st.dataframe(df_filtered_video[['date', 'daily_watch_count', 'cumulative_watch_count']])
 
                 else:
                     st.warning(f"動画ID: {video_id_input} のデータは見つかりませんでした。")
