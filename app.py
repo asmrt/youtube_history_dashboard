@@ -242,7 +242,7 @@ def show_dashboard(
                 heat_src.rename(columns={'time_jst':'date_for_pivot'}),
                 date_col='date_for_pivot', value_col='daily_watch_count'
             )
-            st.pyplot(render_heatmap(pt, f'Daily Views Heatmap: {title}'))
+            st.pyplot(render_heatmap(pt, f'Daily Views Heatmap'))
         else:
             st.info('No data available for heatmap.')
 
@@ -251,21 +251,13 @@ def show_dashboard(
             st.warning('対象動画の集計データが見つかりませんでした。')
             return
         df_v['date'] = df_v['time'].dt.date
-
-        st.markdown("---")
-        # Bar chart for daily watch counts of a single video
-        st.subheader('Daily Views')
-        st.pyplot(render_bar(
-            df_v, x='date', y='daily_watch_count',
-            title=f'Daily Views: {title}', xlabel='Date', ylabel='Daily Views'
-        ))
-
+        
         st.markdown("---")
         # Line chart for cumulative watch counts of a single video
         st.subheader('Cumulative Views')
         st.pyplot(render_line(
             df_v, x='date', y='cumulative_watch_count',
-            title=f'Cumulative Views: {title}', xlabel='Date', ylabel='Cumulative Views'
+            title=f'Cumulative Views', xlabel='Date', ylabel='Cumulative Views'
         ))
 
         st.markdown("---")
