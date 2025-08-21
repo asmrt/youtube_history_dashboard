@@ -158,8 +158,9 @@ def build_scoreboard(df_cumulative: pd.DataFrame, video_info_dict: dict) -> pd.D
     df_info.columns = ['video_id', 'title', 'thumbnail_url']
 
     out = pd.merge(df_latest, df_info, on='video_id', how='left')
+    # sort in descending order of cumulative views and keep only the top 5 entries
     out = out.sort_values('cumulative_watch_count', ascending=False).reset_index(drop=True)
-    return out
+    return out.head(5)
 
 # ---------------------------------------
 # たった1つの公開API：全体 / 動画別の統一描画
@@ -184,7 +185,9 @@ def show_dashboard(
         st.subheader('📈 全体の視聴統計')
 
         if df_scoreboard is not None and not df_scoreboard.empty:
-            st.subheader('動画別 累積視聴回数 スコアボード (最新)')
+            # Display a scoreboard of the top videos by cumulative views (latest)
+            st.subheader('Top Videos by Cumulative Views (Latest)')
+            # Only show the video title and cumulative views in the table
             st.dataframe(
                 df_scoreboard[['title', 'cumulative_watch_count']],
                 use_container_width=True, hide_index=True
@@ -192,32 +195,35 @@ def show_dashboard(
 
         if df_daily_total is not None and not df_daily_total.empty:
             st.markdown("---")
-            st.subheader('日ごとの総視聴回数ヒートマップ')
+            # Heatmap of daily total watch counts
+            st.subheader('Daily Total Views Heatmap')
             pt = _weekday_pivot(
                 df_daily_total.rename(columns={'date': 'date_for_pivot'}),
                 date_col='date_for_pivot', value_col='total_watch_count'
             )
-            st.pyplot(render_heatmap(pt, '日ごとの総視聴回数ヒートマップ'))
+            st.pyplot(render_heatmap(pt, 'Daily Total Views Heatmap'))
 
             st.markdown("---")
-            st.subheader('日ごとの総視聴回数')
-            st.pyplot(render_line(
+            # Bar chart of daily total watch counts
+            st.subheader('Daily Total Views')
+            st.pyplot(render_bar(
                 df_daily_total, x='date', y='total_watch_count',
-                title='日ごとの総視聴回数', xlabel='日付', ylabel='総視聴回数'
+                title='Daily Total Views', xlabel='Date', ylabel='Total Views'
             ))
             if most_day is not None and 'date' in most_day:
-                st.markdown(f"**💡 一番視聴回数が多かった日:** `{pd.to_datetime(most_day['date']).date()}` ({most_day['total_watch_count']} 回)")
+                st.markdown(f"**💡 Most watched day:** `{pd.to_datetime(most_day['date']).date()}` ({most_day['total_watch_count']} views)")
 
         if df_monthly_total is not None and not df_monthly_total.empty:
             st.markdown("---")
-            st.subheader('月ごとの総視聴回数')
+            # Bar chart of monthly total watch counts
+            st.subheader('Monthly Total Views')
             st.pyplot(render_bar(
                 df_monthly_total, x='month', y='total_watch_count',
-                title='月ごとの総視聴回数', xlabel='月', ylabel='総視聴回数',
+                title='Monthly Total Views', xlabel='Month', ylabel='Total Views',
                 figsize=(12,6), color='salmon'
             ))
             if most_month is not None and 'month' in most_month:
-                st.markdown(f"**💡 一番視聴回数が多かった月:** `{most_month['month']}` ({most_month['total_watch_count']} 回)")
+                st.markdown(f"**💡 Most watched month:** `{most_month['month']}` ({most_month['total_watch_count']} views)")
 
     else:
         # ---- 動画別 ----
@@ -230,14 +236,15 @@ def show_dashboard(
         heat_src = df_daily[df_daily['video_id'] == video_id].copy()
         if not heat_src.empty:
             st.markdown("---")
-            st.subheader('日次視聴回数ヒートマップ')
+            # Heatmap for daily watch counts of a single video
+            st.subheader('Daily View Count Heatmap')
             pt = _weekday_pivot(
                 heat_src.rename(columns={'time_jst':'date_for_pivot'}),
                 date_col='date_for_pivot', value_col='daily_watch_count'
             )
-            st.pyplot(render_heatmap(pt, f'日ごとの視聴回数ヒートマップ: {title}'))
+            st.pyplot(render_heatmap(pt, f'Daily Views Heatmap: {title}'))
         else:
-            st.info('ヒートマップ用データがありません。')
+            st.info('No data available for heatmap.')
 
         df_v = df_cumulative[df_cumulative['video_id'] == video_id].copy()
         if df_v.empty:
@@ -246,17 +253,19 @@ def show_dashboard(
         df_v['date'] = df_v['time'].dt.date
 
         st.markdown("---")
-        st.subheader('日次視聴回数')
+        # Bar chart for daily watch counts of a single video
+        st.subheader('Daily Views')
         st.pyplot(render_bar(
             df_v, x='date', y='daily_watch_count',
-            title=f'日次視聴回数: {title}', xlabel='日付', ylabel='日次視聴回数'
+            title=f'Daily Views: {title}', xlabel='Date', ylabel='Daily Views'
         ))
 
         st.markdown("---")
-        st.subheader('累積視聴回数')
+        # Line chart for cumulative watch counts of a single video
+        st.subheader('Cumulative Views')
         st.pyplot(render_line(
             df_v, x='date', y='cumulative_watch_count',
-            title=f'累積視聴回数: {title}', xlabel='日付', ylabel='累積視聴回数'
+            title=f'Cumulative Views: {title}', xlabel='Date', ylabel='Cumulative Views'
         ))
 
         st.markdown("---")
