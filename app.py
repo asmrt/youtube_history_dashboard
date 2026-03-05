@@ -138,10 +138,8 @@ def apply_filters(df_processed: pd.DataFrame, channel_filter: list, date_range: 
     """チャンネル絞り込み・期間絞り込みを適用して df_processed を返す。"""
     df = df_processed.copy()
     start_date, end_date = date_range
-    df = df[
-        (df['time_jst'].dt.date >= start_date) &
-        (df['time_jst'].dt.date <= end_date)
-    ]
+    dates = df['time_jst'].dt.normalize().dt.tz_localize(None).dt.date
+    df = df[(dates >= start_date) & (dates <= end_date)]
     if channel_filter:
         df = df[df['channel_name'].isin(channel_filter)]
     return df
@@ -321,8 +319,9 @@ def main():
     # ---- サイドバー：期間フィルタ ----
     st.sidebar.markdown("---")
     st.sidebar.subheader('📅 期間絞り込み')
-    min_date = df_processed['time_jst'].dt.date.min()
-    max_date = df_processed['time_jst'].dt.date.max()
+    dates_series = df_processed['time_jst'].dt.normalize().dt.tz_localize(None)
+    min_date = dates_series.min().date()
+    max_date = dates_series.max().date()
     date_start = st.sidebar.date_input('開始日', value=min_date, min_value=min_date, max_value=max_date)
     date_end   = st.sidebar.date_input('終了日', value=max_date, min_value=min_date, max_value=max_date)
     if date_start > date_end:
