@@ -160,7 +160,7 @@ def build_scoreboard(df_cumulative: pd.DataFrame, video_info_dict: dict) -> pd.D
     out = pd.merge(df_latest, df_info, on='video_id', how='left')
     # sort in descending order of cumulative views and keep only the top 5 entries
     out = out.sort_values('cumulative_watch_count', ascending=False).reset_index(drop=True)
-    return out.head(5)
+    return out.head(20)
 
 # ---------------------------------------
 # たった1つの公開API：全体 / 動画別の統一描画
