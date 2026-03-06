@@ -215,12 +215,21 @@ def show_dashboard(
             cols = st.columns(3)
             medals = ['🥇', '🥈', '🥉']
             for i, (_, row) in enumerate(top3.iterrows()):
+                yt_url = f"https://www.youtube.com/watch?v={row['video_id']}"
                 with cols[i]:
-                    st.markdown(f"**{medals[i]} {row['title']}**")
-                    st.image(
-                        row['thumbnail_url'],
-                        caption=f"{row['cumulative_watch_count']} views  |  {row['video_id']}",
-                        use_container_width=True
+                    st.markdown(
+                        f"""
+                        <a href="{yt_url}" target="_blank" style="text-decoration:none; color:inherit;">
+                          <img src="{row['thumbnail_url']}" style="width:100%; border-radius:6px;" />
+                          <div style="margin-top:6px; font-weight:bold; font-size:0.9em;">
+                            {medals[i]} {row['title']}
+                          </div>
+                          <div style="color:#888; font-size:0.8em; margin-top:2px;">
+                            {row['cumulative_watch_count']} views &nbsp;|&nbsp; {row['video_id']}
+                          </div>
+                        </a>
+                        """,
+                        unsafe_allow_html=True
                     )
 
             st.markdown("")
@@ -264,7 +273,16 @@ def show_dashboard(
         st.subheader(f'🎥 {info["title"]}')
         st.caption(f'📺 チャンネル: {info.get("channel_name", "不明")}　|　🆔 {video_id}')
         if info.get('thumbnail_url'):
-            st.image(info['thumbnail_url'], caption=info['title'])
+            yt_url = f"https://www.youtube.com/watch?v={video_id}"
+            st.markdown(
+                f"""
+                <a href="{yt_url}" target="_blank" style="text-decoration:none;">
+                  <img src="{info['thumbnail_url']}" style="width:320px; border-radius:6px;" />
+                  <div style="margin-top:4px; color:#A63228; font-size:0.85em;">▶ YouTubeで開く</div>
+                </a>
+                """,
+                unsafe_allow_html=True
+            )
 
         heat_src = df_daily[df_daily['video_id'] == video_id].copy()
         if not heat_src.empty:
