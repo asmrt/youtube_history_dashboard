@@ -95,86 +95,73 @@ def render_bar(df, x, y, title, xlabel, ylabel, figsize=(14, 7), color=COLOR_RED
 
 
 def render_calendar_heatmap(df_daily_total: pd.DataFrame, year: int, month: int):
-    """
-    指定年月のカレンダー型ヒートマップを描画。
-    行=週（その月に含まれる週）、列=曜日(Mon〜Sun)。
-    """
+    """Calendar heatmap for a given year/month. Rows=weeks, cols=weekdays."""
     import calendar
     import numpy as np
 
-    # 対象月のデータ抽出
+    MONTH_NAMES = ['January','February','March','April','May','June',
+                   'July','August','September','October','November','December']
+
     tmp = df_daily_total.copy()
     tmp['date'] = pd.to_datetime(tmp['date'])
     tmp = tmp[(tmp['date'].dt.year == year) & (tmp['date'].dt.month == month)]
 
-    # その月の全日付グリッドを作成
     first_day = pd.Timestamp(year, month, 1)
-    last_day  = pd.Timestamp(year, month, calendar.monthrange(year, month)[1])
-    all_dates = pd.date_range(first_day, last_day)
-
+    all_dates = pd.date_range(first_day, periods=calendar.monthrange(year, month)[1])
     date_to_count = tmp.set_index('date')['total_watch_count'].to_dict()
 
-    # 週×曜日グリッド
-    # 週番号: その月の最初の日を0行目として、月曜始まりで配置
-    # 月の最初の曜日 (月=0, 日=6)
     start_weekday = first_day.weekday()  # 0=Mon
-    num_days = len(all_dates)
+    num_days  = len(all_dates)
     num_weeks = (start_weekday + num_days + 6) // 7
 
-    grid = np.full((num_weeks, 7), np.nan)
+    grid       = np.full((num_weeks, 7), np.nan)
     day_labels = np.full((num_weeks, 7), '', dtype=object)
 
     for i, d in enumerate(all_dates):
-        col = d.weekday()  # 0=Mon
+        col = d.weekday()
         row = (start_weekday + i) // 7
-        count = date_to_count.get(d, 0)
-        grid[row, col] = count
+        grid[row, col]       = date_to_count.get(d, 0)
         day_labels[row, col] = str(d.day)
 
     weekday_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    week_labels = [f'Week {w+1}' for w in range(num_weeks)]
 
-    fig, ax = plt.subplots(figsize=(10, max(3, num_weeks * 1.1)))
+    fig, ax = plt.subplots(figsize=(10, max(2.5, num_weeks * 1.0)))
     fig.patch.set_facecolor('#FAFAFA')
     ax.set_facecolor('#FAFAFA')
 
-    # マスクなしでnanセルは白で描画
-    cmap = mcolors.LinearSegmentedColormap.from_list('cal_cmap', ['#F5F5F5', '#B0B0B0', '#A63228'])
-    vmax = np.nanmax(grid) if not np.all(np.isnan(grid)) else 1
+    cmap  = mcolors.LinearSegmentedColormap.from_list('cal_cmap', ['#F5F5F5', '#B0B0B0', '#A63228'])
+    vmax  = np.nanmax(grid) if not np.all(np.isnan(grid)) else 1
 
-    # nan を -1 に置換してマスク描画
     plot_grid = np.where(np.isnan(grid), -1, grid)
-    masked = np.ma.masked_where(plot_grid < 0, plot_grid)
+    masked    = np.ma.masked_where(plot_grid < 0, plot_grid)
+    im        = ax.imshow(masked, cmap=cmap, vmin=0, vmax=vmax, aspect='auto')
 
-    im = ax.imshow(masked, cmap=cmap, vmin=0, vmax=vmax, aspect='auto')
-
-    # nan セルを白塗り
+    # nan セル（月外）を白塗り
     nan_cmap = mcolors.ListedColormap(['white'])
     nan_grid = np.ma.masked_where(plot_grid >= 0, plot_grid)
     ax.imshow(nan_grid, cmap=nan_cmap, vmin=0, vmax=1, aspect='auto')
 
-    # 日付ラベル
     for r in range(num_weeks):
         for c in range(7):
             if day_labels[r, c]:
-                count_val = grid[r, c]
+                count_val  = grid[r, c]
                 text_color = 'white' if (not np.isnan(count_val) and count_val > vmax * 0.6) else COLOR_GRAY
-                ax.text(c, r, day_labels[r, c], ha='center', va='center',
+                ax.text(c, r - 0.15, day_labels[r, c], ha='center', va='center',
                         fontsize=11, color=text_color, fontweight='bold')
                 if not np.isnan(count_val) and count_val > 0:
-                    ax.text(c, r + 0.28, str(int(count_val)), ha='center', va='center',
-                            fontsize=7, color=text_color)
+                    ax.text(c, r + 0.25, str(int(count_val)), ha='center', va='center',
+                            fontsize=8, color=text_color)
 
     ax.set_xticks(range(7))
-    ax.set_xticklabels(weekday_names, color=COLOR_GRAY)
-    ax.set_yticks(range(num_weeks))
-    ax.set_yticklabels(week_labels, color=COLOR_GRAY)
+    ax.set_xticklabels(weekday_names, color=COLOR_GRAY, fontsize=10)
+    ax.set_yticks([])  # Week表記なし
     ax.tick_params(length=0)
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-    plt.colorbar(im, ax=ax, label='視聴回数', shrink=0.6)
-    ax.set_title(f'{year}年{month}月 カレンダーヒートマップ', color=COLOR_GRAY, fontsize=13, pad=12)
+    plt.colorbar(im, ax=ax, label='Views', shrink=0.6)
+    ax.set_title(f'{MONTH_NAMES[month-1]} {year}  —  Calendar Heatmap',
+                 color=COLOR_GRAY, fontsize=13, pad=12)
     plt.tight_layout()
     return fig
 
@@ -337,7 +324,7 @@ def show_dashboard(
             # カレンダー型ヒートマップ
             if cal_year is not None and cal_month is not None:
                 st.markdown("---")
-                st.subheader(f'📅 カレンダーヒートマップ　{cal_year}年{cal_month}月')
+                st.subheader(f'📅 Calendar Heatmap')
                 st.pyplot(render_calendar_heatmap(df_daily_total, cal_year, cal_month))
 
             st.markdown("---")
