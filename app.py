@@ -253,7 +253,8 @@ def build_aggregates(df_processed: pd.DataFrame):
 
     # 全体日次
     df_daily_total = (
-        df_processed['time_jst'].dt.date.value_counts().sort_index().reset_index()
+        df_processed['time_jst'].dt.normalize().dt.tz_localize(None)
+        .value_counts().sort_index().reset_index()
     )
     df_daily_total.columns = ['date', 'total_watch_count']
     df_daily_total['date'] = pd.to_datetime(df_daily_total['date'])
@@ -509,4 +510,19 @@ def main():
     # ---- メイン表示 ----
     show_dashboard(
         df_daily_total=df_daily_total,
-        df_mont
+        df_monthly_total=df_monthly_total,
+        df_daily=df_daily,
+        df_cumulative=df_cumulative,
+        video_info_dict=filtered_video_info,
+        df_scoreboard=df_scoreboard,
+        video_id=selected_video_id,
+        cal_year=cal_year,
+        cal_month=cal_month
+    )
+
+    with st.expander("元のデータ (プレビュー)"):
+        st.dataframe(df_filtered.head(), use_container_width=True)
+
+
+if __name__ == "__main__":
+    main()
