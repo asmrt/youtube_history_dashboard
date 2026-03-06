@@ -93,6 +93,91 @@ def render_bar(df, x, y, title, xlabel, ylabel, figsize=(14, 7), color=COLOR_RED
         ax.bar_label(c, color=COLOR_GRAY, fontsize=8)
     return fig
 
+
+def render_calendar_heatmap(df_daily_total: pd.DataFrame, year: int, month: int):
+    """
+    指定年月のカレンダー型ヒートマップを描画。
+    行=週（その月に含まれる週）、列=曜日(Mon〜Sun)。
+    """
+    import calendar
+    import numpy as np
+
+    # 対象月のデータ抽出
+    tmp = df_daily_total.copy()
+    tmp['date'] = pd.to_datetime(tmp['date'])
+    tmp = tmp[(tmp['date'].dt.year == year) & (tmp['date'].dt.month == month)]
+
+    # その月の全日付グリッドを作成
+    first_day = pd.Timestamp(year, month, 1)
+    last_day  = pd.Timestamp(year, month, calendar.monthrange(year, month)[1])
+    all_dates = pd.date_range(first_day, last_day)
+
+    date_to_count = tmp.set_index('date')['total_watch_count'].to_dict()
+
+    # 週×曜日グリッド
+    # 週番号: その月の最初の日を0行目として、月曜始まりで配置
+    # 月の最初の曜日 (月=0, 日=6)
+    start_weekday = first_day.weekday()  # 0=Mon
+    num_days = len(all_dates)
+    num_weeks = (start_weekday + num_days + 6) // 7
+
+    grid = np.full((num_weeks, 7), np.nan)
+    day_labels = np.full((num_weeks, 7), '', dtype=object)
+
+    for i, d in enumerate(all_dates):
+        col = d.weekday()  # 0=Mon
+        row = (start_weekday + i) // 7
+        count = date_to_count.get(d, 0)
+        grid[row, col] = count
+        day_labels[row, col] = str(d.day)
+
+    weekday_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    week_labels = [f'Week {w+1}' for w in range(num_weeks)]
+
+    fig, ax = plt.subplots(figsize=(10, max(3, num_weeks * 1.1)))
+    fig.patch.set_facecolor('#FAFAFA')
+    ax.set_facecolor('#FAFAFA')
+
+    # マスクなしでnanセルは白で描画
+    cmap = mcolors.LinearSegmentedColormap.from_list('cal_cmap', ['#F5F5F5', '#B0B0B0', '#A63228'])
+    vmax = np.nanmax(grid) if not np.all(np.isnan(grid)) else 1
+
+    # nan を -1 に置換してマスク描画
+    plot_grid = np.where(np.isnan(grid), -1, grid)
+    masked = np.ma.masked_where(plot_grid < 0, plot_grid)
+
+    im = ax.imshow(masked, cmap=cmap, vmin=0, vmax=vmax, aspect='auto')
+
+    # nan セルを白塗り
+    nan_cmap = mcolors.ListedColormap(['white'])
+    nan_grid = np.ma.masked_where(plot_grid >= 0, plot_grid)
+    ax.imshow(nan_grid, cmap=nan_cmap, vmin=0, vmax=1, aspect='auto')
+
+    # 日付ラベル
+    for r in range(num_weeks):
+        for c in range(7):
+            if day_labels[r, c]:
+                count_val = grid[r, c]
+                text_color = 'white' if (not np.isnan(count_val) and count_val > vmax * 0.6) else COLOR_GRAY
+                ax.text(c, r, day_labels[r, c], ha='center', va='center',
+                        fontsize=11, color=text_color, fontweight='bold')
+                if not np.isnan(count_val) and count_val > 0:
+                    ax.text(c, r + 0.28, str(int(count_val)), ha='center', va='center',
+                            fontsize=7, color=text_color)
+
+    ax.set_xticks(range(7))
+    ax.set_xticklabels(weekday_names, color=COLOR_GRAY)
+    ax.set_yticks(range(num_weeks))
+    ax.set_yticklabels(week_labels, color=COLOR_GRAY)
+    ax.tick_params(length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    plt.colorbar(im, ax=ax, label='視聴回数', shrink=0.6)
+    ax.set_title(f'{year}年{month}月 カレンダーヒートマップ', color=COLOR_GRAY, fontsize=13, pad=12)
+    plt.tight_layout()
+    return fig
+
 # ---------------------------------------
 # データ読み込み・前処理
 # ---------------------------------------
@@ -202,7 +287,8 @@ def build_scoreboard(df_cumulative: pd.DataFrame, video_info_dict: dict) -> pd.D
 # ---------------------------------------
 def show_dashboard(
     df_daily_total, df_monthly_total, df_daily, df_cumulative,
-    video_info_dict, df_scoreboard=None, video_id=None
+    video_info_dict, df_scoreboard=None, video_id=None,
+    cal_year=None, cal_month=None
 ):
     if video_id is None:
         # ---- 全体統計 ----
@@ -246,6 +332,12 @@ def show_dashboard(
                 date_col='date_for_pivot', value_col='total_watch_count'
             )
             st.pyplot(render_heatmap(pt, 'Daily Total Views Heatmap'))
+
+            # カレンダー型ヒートマップ
+            if cal_year is not None and cal_month is not None:
+                st.markdown("---")
+                st.subheader(f'📅 カレンダーヒートマップ　{cal_year}年{cal_month}月')
+                st.pyplot(render_calendar_heatmap(df_daily_total, cal_year, cal_month))
 
             st.markdown("---")
             st.subheader('Daily Total Views')
@@ -370,6 +462,25 @@ def main():
 
     df_scoreboard = build_scoreboard(df_cumulative, filtered_video_info)
 
+    # ---- サイドバー：カレンダー月選択 ----
+    st.sidebar.markdown("---")
+    st.sidebar.subheader('📅 カレンダーヒートマップ')
+    # df_daily_total から利用可能な年月リストを生成
+    avail_months = (
+        df_daily_total['date']
+        .dt.to_period('M')
+        .drop_duplicates()
+        .sort_values()
+        .tolist()
+    ) if df_daily_total is not None and not df_daily_total.empty else []
+    avail_month_strs = [str(p) for p in avail_months]
+    cal_selected = st.sidebar.selectbox(
+        '月を選択', options=avail_month_strs,
+        index=len(avail_month_strs) - 1 if avail_month_strs else 0
+    )
+    cal_year  = int(cal_selected[:4]) if cal_selected else None
+    cal_month = int(cal_selected[5:7]) if cal_selected else None
+
     # ---- サイドバー：動画セレクタ ----
     st.sidebar.markdown("---")
     st.sidebar.subheader('🎬 動画選択')
@@ -398,17 +509,4 @@ def main():
     # ---- メイン表示 ----
     show_dashboard(
         df_daily_total=df_daily_total,
-        df_monthly_total=df_monthly_total,
-        df_daily=df_daily,
-        df_cumulative=df_cumulative,
-        video_info_dict=filtered_video_info,
-        df_scoreboard=df_scoreboard,
-        video_id=selected_video_id
-    )
-
-    with st.expander("元のデータ (プレビュー)"):
-        st.dataframe(df_filtered.head(), use_container_width=True)
-
-
-if __name__ == "__main__":
-    main()
+        df_mont
