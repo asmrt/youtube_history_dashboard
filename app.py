@@ -351,19 +351,26 @@ def show_dashboard(
         # ---- 動画別 ----
         info = video_info_dict.get(video_id, {'title': f'動画ID: {video_id}', 'thumbnail_url': None, 'channel_name': '不明'})
         st.subheader(f'🎥 {info["title"]}')
-        st.caption(f'📺 チャンネル: {info.get("channel_name", "不明")}　|　🆔 {video_id}')
+        st.caption(f'📺 Channel: {info.get("channel_name", "N/A")}　|　🆔 {video_id}')
         if info.get('thumbnail_url'):
             yt_url = f"https://www.youtube.com/watch?v={video_id}"
             st.markdown(
                 f"""
                 <a href="{yt_url}" target="_blank" style="text-decoration:none;">
                   <img src="{info['thumbnail_url']}" style="width:320px; border-radius:6px;" />
-                  <div style="margin-top:4px; color:#A63228; font-size:0.85em;">▶ YouTubeで開く</div>
+                  <div style="margin-top:4px; color:#A63228; font-size:0.85em;">▶ Open on YouTube</div>
                 </a>
                 """,
                 unsafe_allow_html=True
             )
 
+        df_v = df_cumulative[df_cumulative['video_id'] == video_id].copy()
+        if df_v.empty:
+            st.warning('No data found for this video.')
+            return
+        df_v['date'] = pd.to_datetime(df_v['time'].dt.date)
+
+        # ---- Daily Heatmap（横長）----
         heat_src = df_daily[df_daily['video_id'] == video_id].copy()
         if not heat_src.empty:
             st.markdown("---")
@@ -373,15 +380,45 @@ def show_dashboard(
                 date_col='date_for_pivot', value_col='daily_watch_count'
             )
             st.pyplot(render_heatmap(pt, 'Daily Views Heatmap'))
+
+            # ---- Calendar Heatmap ----
+            if cal_year is not None and cal_month is not None:
+                # 動画別の日次データを df_daily_total 相当の形式に変換して渡す
+                df_v_daily_fmt = heat_src.rename(columns={'time_jst': 'date', 'daily_watch_count': 'total_watch_count'})[['date', 'total_watch_count']].copy()
+                df_v_daily_fmt['date'] = pd.to_datetime(df_v_daily_fmt['date'])
+                st.markdown("---")
+                st.subheader('📅 Calendar Heatmap')
+                st.pyplot(render_calendar_heatmap(df_v_daily_fmt, cal_year, cal_month))
         else:
             st.info('No data available for heatmap.')
 
-        df_v = df_cumulative[df_cumulative['video_id'] == video_id].copy()
-        if df_v.empty:
-            st.warning('対象動画の集計データが見つかりませんでした。')
-            return
-        df_v['date'] = df_v['time'].dt.date
+        # ---- Daily Views 棒グラフ ----
+        st.markdown("---")
+        st.subheader('Daily Views')
+        most_day = df_v.loc[df_v['daily_watch_count'].idxmax()]
+        st.pyplot(render_bar(
+            df_v, x='date', y='daily_watch_count',
+            title='Daily Views', xlabel='Date', ylabel='Views'
+        ))
+        st.markdown(f"**💡 Most watched day:** `{pd.to_datetime(most_day['date']).date()}` ({most_day['daily_watch_count']} views)")
 
+        # ---- Monthly Views 棒グラフ ----
+        df_v_monthly = df_v.copy()
+        df_v_monthly['month'] = df_v_monthly['date'].dt.to_period('M').astype(str)
+        df_v_monthly_agg = df_v_monthly.groupby('month')['daily_watch_count'].sum().reset_index()
+        df_v_monthly_agg.columns = ['month', 'total_watch_count']
+        if not df_v_monthly_agg.empty:
+            st.markdown("---")
+            st.subheader('Monthly Views')
+            most_month = df_v_monthly_agg.loc[df_v_monthly_agg['total_watch_count'].idxmax()]
+            st.pyplot(render_bar(
+                df_v_monthly_agg, x='month', y='total_watch_count',
+                title='Monthly Views', xlabel='Month', ylabel='Views',
+                figsize=(12, 6), color=COLOR_GRAY
+            ))
+            st.markdown(f"**💡 Most watched month:** `{most_month['month']}` ({most_month['total_watch_count']} views)")
+
+        # ---- Cumulative Views 折れ線 ----
         st.markdown("---")
         st.subheader('Cumulative Views')
         st.pyplot(render_line(
@@ -389,8 +426,9 @@ def show_dashboard(
             title='Cumulative Views', xlabel='Date', ylabel='Cumulative Views'
         ))
 
+        # ---- 詳細データ表 ----
         st.markdown("---")
-        st.subheader('詳細データ')
+        st.subheader('Detail Data')
         st.dataframe(
             df_v[['date', 'daily_watch_count', 'cumulative_watch_count']],
             use_container_width=True, hide_index=True
