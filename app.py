@@ -25,11 +25,54 @@ HEATMAP_CMAP = mcolors.LinearSegmentedColormap.from_list(
 # ---------------------------------------
 # Matplotlib 日本語フォント設定
 # ---------------------------------------
-try:
-    plt.rcParams['font.family'] = 'IPAexGothic'
+# rcParams への代入は存在しないフォントでも例外を投げないため、
+# 実際に登録済みのフォントを探して設定し、無ければ sans-serif にフォールバックする。
+import glob
+from matplotlib import font_manager
+
+
+def _setup_japanese_font():
     plt.rcParams['axes.unicode_minus'] = False
-except Exception:
+    candidates = ['IPAexGothic', 'IPAPGothic', 'IPAGothic',
+                  'Noto Sans CJK JP', 'TakaoGothic', 'VL Gothic']
+
+    available = {f.name for f in font_manager.fontManager.ttflist}
+    for name in candidates:
+        if name in available:
+            plt.rcParams['font.family'] = name
+            return name
+
+    # フォントファイルを明示パスから登録（apt: fonts-ipaexfont / fonts-noto-cjk 等）
+    patterns = ['/usr/share/fonts/**/*.ttf', '/usr/share/fonts/**/*.otf',
+                '/usr/share/fonts/**/*.ttc']
+    for pattern in patterns:
+        for path in glob.glob(pattern, recursive=True):
+            low = path.lower()
+            if any(k in low for k in ('ipaex', 'ipag', 'notosanscjk', 'notosansjp')):
+                try:
+                    font_manager.fontManager.addfont(path)
+                    prop_name = font_manager.FontProperties(fname=path).get_name()
+                    plt.rcParams['font.family'] = prop_name
+                    return prop_name
+                except Exception:
+                    continue
+
     plt.rcParams['font.family'] = 'sans-serif'
+    return 'sans-serif'
+
+
+_setup_japanese_font()
+
+
+def show_and_close(fig):
+    """Figure を Streamlit に描画してから確実にメモリ解放する。
+
+    st.pyplot は Figure を描画するだけで閉じないため、明示的に close しないと
+    再実行のたびに Figure が蓄積し、メモリ枯渇（Streamlit Cloud での
+    Segmentation fault）を招く。
+    """
+    st.pyplot(fig)
+    plt.close(fig)
 
 # ---------------------------------------
 # 共通ピボット＆描画ユーティリティ
@@ -319,18 +362,18 @@ def show_dashboard(
                 df_daily_total.rename(columns={'date': 'date_for_pivot'}),
                 date_col='date_for_pivot', value_col='total_watch_count'
             )
-            st.pyplot(render_heatmap(pt, 'Daily Total Views Heatmap'))
+            show_and_close(render_heatmap(pt, 'Daily Total Views Heatmap'))
 
             # カレンダー型ヒートマップ
             if cal_year is not None and cal_month is not None:
                 st.markdown("---")
                 st.subheader(f'📅 Calendar Heatmap')
-                st.pyplot(render_calendar_heatmap(df_daily_total, cal_year, cal_month))
+                show_and_close(render_calendar_heatmap(df_daily_total, cal_year, cal_month))
 
             st.markdown("---")
             st.subheader('Daily Total Views')
             most_day = df_daily_total.loc[df_daily_total['total_watch_count'].idxmax()]
-            st.pyplot(render_bar(
+            show_and_close(render_bar(
                 df_daily_total, x='date', y='total_watch_count',
                 title='Daily Total Views', xlabel='Date', ylabel='Total Views'
             ))
@@ -340,7 +383,7 @@ def show_dashboard(
             st.markdown("---")
             st.subheader('Monthly Total Views')
             most_month = df_monthly_total.loc[df_monthly_total['total_watch_count'].idxmax()]
-            st.pyplot(render_bar(
+            show_and_close(render_bar(
                 df_monthly_total, x='month', y='total_watch_count',
                 title='Monthly Total Views', xlabel='Month', ylabel='Total Views',
                 figsize=(12, 6), color=COLOR_GRAY
@@ -379,7 +422,7 @@ def show_dashboard(
                 heat_src.rename(columns={'time_jst': 'date_for_pivot'}),
                 date_col='date_for_pivot', value_col='daily_watch_count'
             )
-            st.pyplot(render_heatmap(pt, 'Daily Views Heatmap'))
+            show_and_close(render_heatmap(pt, 'Daily Views Heatmap'))
 
             # ---- Calendar Heatmap ----
             if cal_year is not None and cal_month is not None:
@@ -388,7 +431,7 @@ def show_dashboard(
                 df_v_daily_fmt['date'] = pd.to_datetime(df_v_daily_fmt['date'])
                 st.markdown("---")
                 st.subheader('📅 Calendar Heatmap')
-                st.pyplot(render_calendar_heatmap(df_v_daily_fmt, cal_year, cal_month))
+                show_and_close(render_calendar_heatmap(df_v_daily_fmt, cal_year, cal_month))
         else:
             st.info('No data available for heatmap.')
 
@@ -396,7 +439,7 @@ def show_dashboard(
         st.markdown("---")
         st.subheader('Daily Views')
         most_day = df_v.loc[df_v['daily_watch_count'].idxmax()]
-        st.pyplot(render_bar(
+        show_and_close(render_bar(
             df_v, x='date', y='daily_watch_count',
             title='Daily Views', xlabel='Date', ylabel='Views'
         ))
@@ -411,7 +454,7 @@ def show_dashboard(
             st.markdown("---")
             st.subheader('Monthly Views')
             most_month = df_v_monthly_agg.loc[df_v_monthly_agg['total_watch_count'].idxmax()]
-            st.pyplot(render_bar(
+            show_and_close(render_bar(
                 df_v_monthly_agg, x='month', y='total_watch_count',
                 title='Monthly Views', xlabel='Month', ylabel='Views',
                 figsize=(12, 6), color=COLOR_GRAY
@@ -421,7 +464,7 @@ def show_dashboard(
         # ---- Cumulative Views 折れ線 ----
         st.markdown("---")
         st.subheader('Cumulative Views')
-        st.pyplot(render_line(
+        show_and_close(render_line(
             df_v, x='date', y='cumulative_watch_count',
             title='Cumulative Views', xlabel='Date', ylabel='Cumulative Views'
         ))
