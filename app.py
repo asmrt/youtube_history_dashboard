@@ -23,45 +23,11 @@ HEATMAP_CMAP = mcolors.LinearSegmentedColormap.from_list(
 )
 
 # ---------------------------------------
-# Matplotlib 日本語フォント設定
+# Matplotlib フォント設定
 # ---------------------------------------
-# rcParams への代入は存在しないフォントでも例外を投げないため、
-# 実際に登録済みのフォントを探して設定し、無ければ sans-serif にフォールバックする。
-import glob
-from matplotlib import font_manager
-
-
-def _setup_japanese_font():
-    plt.rcParams['axes.unicode_minus'] = False
-    candidates = ['IPAexGothic', 'IPAPGothic', 'IPAGothic',
-                  'Noto Sans CJK JP', 'TakaoGothic', 'VL Gothic']
-
-    available = {f.name for f in font_manager.fontManager.ttflist}
-    for name in candidates:
-        if name in available:
-            plt.rcParams['font.family'] = name
-            return name
-
-    # フォントファイルを明示パスから登録（apt: fonts-ipaexfont / fonts-noto-cjk 等）
-    patterns = ['/usr/share/fonts/**/*.ttf', '/usr/share/fonts/**/*.otf',
-                '/usr/share/fonts/**/*.ttc']
-    for pattern in patterns:
-        for path in glob.glob(pattern, recursive=True):
-            low = path.lower()
-            if any(k in low for k in ('ipaex', 'ipag', 'notosanscjk', 'notosansjp')):
-                try:
-                    font_manager.fontManager.addfont(path)
-                    prop_name = font_manager.FontProperties(fname=path).get_name()
-                    plt.rcParams['font.family'] = prop_name
-                    return prop_name
-                except Exception:
-                    continue
-
-    plt.rcParams['font.family'] = 'sans-serif'
-    return 'sans-serif'
-
-
-_setup_japanese_font()
+# グラフ内の文字はすべて英語にしているため、デフォルトフォントのままで
+# 文字化けしない。負の符号だけ環境依存を避けるため設定しておく。
+plt.rcParams['axes.unicode_minus'] = False
 
 
 def show_and_close(fig):
@@ -91,15 +57,15 @@ def _weekday_pivot(df: pd.DataFrame, date_col: str, value_col: str) -> pd.DataFr
     )
     return pt.reindex(list(weekday_map.values()))
 
-def render_heatmap(pivot_table, title, cbar_label='視聴回数', figsize=(20, 8)):
+def render_heatmap(pivot_table, title, cbar_label='Views', figsize=(20, 8)):
     fig, ax = plt.subplots(figsize=figsize)
     fig.patch.set_facecolor('#FAFAFA')
     ax.set_facecolor('#FAFAFA')
     sns.heatmap(pivot_table, ax=ax, cmap=HEATMAP_CMAP,
                 linewidths=.5, linecolor='#E0E0E0', cbar_kws={'label': cbar_label})
     ax.set_title(title, color=COLOR_GRAY, fontsize=13)
-    ax.set_xlabel('年月 - 日', color=COLOR_GRAY)
-    ax.set_ylabel('曜日', color=COLOR_GRAY)
+    ax.set_xlabel('Year-Month - Day', color=COLOR_GRAY)
+    ax.set_ylabel('Weekday', color=COLOR_GRAY)
     ax.tick_params(colors=COLOR_GRAY)
     plt.xticks(rotation=90)
     return fig
