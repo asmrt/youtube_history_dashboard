@@ -208,7 +208,11 @@ def load_and_process_data(uploaded_file):
     video_info_dict = {}
     for _, row in df_processed.iterrows():
         vid = row['video_id']
-        title = row['title'].replace(" を視聴しました", "").strip()
+        # 日本語履歴は接尾辞 "... を視聴しました"、英語履歴は接頭辞 "Watched ..."。
+        title = row['title'].replace(" を視聴しました", "")
+        if title.startswith("Watched "):
+            title = title[len("Watched "):]
+        title = title.strip()
         thumb_url = f"http://img.youtube.com/vi/{vid}/hqdefault.jpg"
         channel = row.get('channel_name', None)
         video_info_dict[vid] = {
